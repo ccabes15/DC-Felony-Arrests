@@ -1,0 +1,173 @@
+---
+title: "Exploring DC Felony Arrests in 2016"
+author: "Lucy Bonin, Connor Cabrey, Rachel Carnes, Pape Theodore Seye"
+date: "14 December 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      fig.height = 4,
+                      fig.width = 6, 
+                      fig.align = "center")
+```
+
+```{r include=FALSE}
+Felony_Data <- read.csv("../Data/Felony_Arrest_Charges_in_2016.csv")
+View(Felony_Data)
+library(tidyverse)
+library(tidyverse)
+library(mosaic)
+library(ggplot2)
+library(ggthemes)
+library(sf)
+library(leaflet)
+```
+
+\newpage
+
+#Introduction
+
+It has been evident for years that there are disparities in the criminal justice system in the United States. Those disparities include the ways in which People of Color are disproportionately targeted by both the police, the criminal justice system, and the ways in which people of certain geographical areas are disproportionately targeted. We thought it would be interesting to specifically hone in on Washington, DC and explore these disparities. Using DC Open Data, we found a data set that contained records of felony arrests made by the District of Columbia Metropolitan Police Department (MPD) in 2016. Several of the measures we were interested in looking at were categorical, such as the race of the arrestee, the district the arrest took place in and the MPD charge code (such as narcotics, weapons violations, assault on a police officer, etc.) There were a few quantitative variables we thought we might explore as well, such as age of the arrestee and prior arrest count. After a thorough examination of the data and metadata, we settled on our research question: Do race or ethnicity and area of residence have an impact on felony arrest trends within the District of Columbia? There have been countless research studies done on the overall effect that race has on arrest tendencies, especially those communities which are disadvantaged urban neighborhoods.  These areas tend to lack the required social and political capital required to institute change (Braga 548).  On the other hand, police departments and other law enforcement agencies are funded through the government and are formal organizations with established command structures.  Due to this disparity, it should lie on American police departments to lead the way in establishing change in the inequity constantly present in the American criminal justice system (Braga 549).  When looking at the DC Felony Arrest Data, it is very clear that for even such a progressive city, the inequity in arrests made in the District is incredibly large. 
+After taking into consideration the distribution of the different races/ethnicities in DC populations, we see that black individuals are arrested approximately 77% more than what would be expected given the demographics of the District. With a mean disproportion across PSAs of 2.87 (range 0.94–16.09) for black individuals, compared to a mean arrest disproportion of 0.89 for white individuals (range 0.06–6.16) (Kirk 55)
+People of color are also disproportionately represented in the juvenile and criminal justice systems. There were significant differences in arrests between racial/ethnic groups, with 36.8 % of blacks, 30.3 % of Hispanics, and 27.9 % of whites having ever been arrested. Among those who had been arrested, 26.1 % reported having been arrested before the age of 18 and 50.7 % reported having been arrested more than once (Gase 301).  Blacks also reported higher levels of violent crime than whites. Whites reported the highest level of alcohol and marijuana use. This specific study considered a robust range of individual, home, school, and community factors that could have been driving racial and ethnic disparities. Another study done on policing data from Chicago suggests that not only are there racial disparities in the criminal justice system but a lot of those disparities are often confounded with social context (Kirk 2008). Youths of different racial and ethnic groups often reside in substantially different neighborhood and family contexts and these factors often create the noticeable disparities between certain groups. In his study, Kirk concluded that the level of poverty in a certain neighborhood is often positively related to arrest and explains a large portion of the difference in arrest rates between groups, especially between groups identifying as Black and groups identifying as White. Parental marital status, and socioeconomic status were also related to differing arrest rates. Interestingly, he noted that even when controlling for family & neighborhood predictors, there was still a difference between black youth arrests & other arrest of youths, which suggests that there indeed is a disparity between races, even when controlling for other factors (Kirk 2008).
+Initial Hypothesis: Both race and Police District have an effect on felony arrest trends within the District.  Some race/ethnicities have a proportionally higher number of arrests than others, and certain districts have a higher number of arrests per capita than others.
+\newpage
+
+#Exploratory Data Analysis
+We first decided to look at race and see a breakdown of the number of arrests per race. The races included in the data are American Indian Or Alaska Native, Asian, Black, Native Hawaiian Or Other Pacific Islander, White and Unknown.
+```{r echo=FALSE}
+ggplot(data = Felony_Data, mapping = aes(x = RACE)) +
+  geom_bar() +
+  xlab("Race")
+```
+
+There is an overwhelming number of black people that are arrested in DC-they account for 91.2% of the arrests, while white people account for 6.77% of felony arrests in 2016. However, when looking at the population of the District of Columbia as a whole, Black people make up 46.9% of the DC population, while white people make up 41%. It is clear here that Black people were arrested at a disproportionately higher rate than any other race in 2016. 
+```{r echo=FALSE}
+Felony_Data %>% 
+  filter(MPD_CHARGE_CATEGORY == "Release Violations/Fugitive" | MPD_CHARGE_CATEGORY == "Weapon Violations" | 
+           MPD_CHARGE_CATEGORY == "Narcotics" | MPD_CHARGE_CATEGORY == "Assault with a Dangerous Weapon") %>% 
+  mutate(MPD_CHARGE_CATEGORY = recode(MPD_CHARGE_CATEGORY, `Assault with a Dangerous Weapon` = "ADW", 
+                       `Release Violations/Fugitive` = "Parole Violation")) %>% 
+  ggplot(mapping = aes(x=MPD_CHARGE_CATEGORY, fill= RACE )) + geom_bar(width=.50) + ggtitle("Top Four Charges vs Race") + xlab("MPD CHARGE") + ylab("Amount of Offenses") + scale_fill_discrete(name = "RACE") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+We chose the top four crimes of 2016 and decided to study that even further in regard to race. It is very clear that of all of the four top crimes of 2016, Black people were most heavily arrested than any other race.
+
+Next, we began to further delve into the difference between violent and non-violent crimes committed in the district.  The original data-set does not differentiate between the two, so we created our own delineation.
+
+
+```{r echo=FALSE}
+ggplot(data=Felony_Data ,aes(x=ARREST_DISTRICT, fill= DMPSJ_CATEGORY )) + geom_bar(width=.50) + ggtitle("Total crimes per District") + xlab("Arrest District") +
+      ylab("Amount of Offenses") + scale_fill_discrete(name = "Offense Classification")
+```
+
+This first graph shows the total break down of the different types of crimes committed in each of the seven police districts.
+
+```{r include=FALSE}
+
+violent <- c('Weapons','Assault', 'Sex offense', 'Assault on a police officer', 'Homicide', 'Domestic violence', 'Cruelty to children', 'Robbery
+')
+DC2 <- filter(Felony_Data, DMPSJ_CATEGORY  %in% violent) %>%
+  select(DMPSJ_CATEGORY,ARREST_DISTRICT )
+```
+
+```{r echo=FALSE}
+ggplot(data=DC2,aes(x=ARREST_DISTRICT, fill= DMPSJ_CATEGORY )) + geom_bar( width=.50) + ggtitle("Violent Crimes per District") + xlab("Arrest District") +
+      ylab("Amount of Offenses") + scale_fill_discrete(name = "Offense Classification")
+```
+
+This graph shows the violent crime arrests by district.  Here it is very clear that districts 5, 6, and 7 have the highest amount of violent crime arrests in DC.
+
+
+```{r echo=FALSE}
+nonviolent <- c('Failure to appear','Drugs','Obstruction of justice','Vehicle','Theft','Property','Trafficking stolen property','Burglary','Conspiracy','Contraband in jail','Fleeing/resisting arrest','Fraud','Other','Prisoner escape','Prostitution','Stalking', '	
+Contempt')
+DC3 <- filter(Felony_Data, DMPSJ_CATEGORY  %in% nonviolent) %>%
+  select(DMPSJ_CATEGORY,ARREST_DISTRICT)
+
+
+ggplot(data=DC3,aes(x=ARREST_DISTRICT, fill= DMPSJ_CATEGORY )) + geom_bar(width=.50) + ggtitle("Non-Violent Crimes per District") + xlab("Arrest District") + 
+      ylab("Amount of Offenses") + scale_fill_discrete(name = "Offense Classification")
+
+```
+
+This graph shows the non-violent crime arrests by police district.  Here we see that district 5 has the most in DC, overtaking 6 and 7.
+```{r include=FALSE}
+
+Felony_Data%>%
+  mutate(DMPSJ_CATEGORY = fct_collapse(DMPSJ_CATEGORY, 
+                                       Violent = c("Assault", "Weapons", "Assault on a police officer", "Domestic violence", "Cruelty to children", "Homicide", "Sex offense"),
+                                       Non_Violent = c("Burglary","Conspiracy","Contempt","Contraband in jail","Drugs","Failure to appear","Fleeing/resisting arrest","Fraud","Obstruction of justice","Other","Prisoner escape","Property","Prostitution","Robbery","Stalking","Theft","Trafficking stolen property","Vehicle", "Weapons"))) ->DC_New
+```
+
+```{r echo=FALSE}
+ggplot(data=DC_New,aes(x=ARREST_DISTRICT, fill= DMPSJ_CATEGORY )) + geom_bar( width=.50) + ggtitle("Violent vs. Non Violent Crimes per District") + xlab("Arrest District") +
+      ylab("Amount of Offenses") + scale_fill_discrete(name = "Offense Classification")
+```
+
+This next graph shows the ratio of violent to non-violent crime arrests by police district.
+```{r echo=FALSE}
+ggplot(data=DC_New,aes(x=ARREST_DISTRICT, fill= DMPSJ_CATEGORY )) + geom_bar( width=.50) + ggtitle("Violent vs. Non Violent Crimes per District") + xlab("Arrest District") +
+      ylab("Amount of Offenses") + scale_fill_discrete(name = "Offense Classification") + facet_wrap(~ RACE)
+```
+
+This final graph shows the same thing, but separated by race across all police districts.  Once again, it is very clear that Black people are arrested at a far higher rate than any other race across all seven police districts.
+```{r include=FALSE}
+dc <- st_read("../Data/shape/Ward_from_2012.shp")
+```
+```{r echo=FALSE, warning=FALSE}
+ggplot()+
+  geom_sf(data = dc, color = "black")+
+  geom_point(data = DC_New, mapping = aes(x = LONGITUDE, y = LATITUDE, color = DMPSJ_CATEGORY), alpha = 0.5)+
+  coord_sf(xlim = c(-76.90915, -77.1198), ylim = c(38.79164, 38.99597))+
+  theme_bw()+
+  ggtitle("Violent and Non-Violent Felony Arrests Across DC Wards")+
+  xlab("Longitude")+
+  ylab("Latitude")
+```
+
+This final graph is a map of all arrests made in DC, and broken down by Violent by Non-Violent.  The map shown is a DC Map with the 8 Ward Boundaries depicted.  Once again, it is clear the the SE portion of DC has the highest density of arrests, while the NW part has a much lower density.  Further research into population/race density in those wards shows that the SE portion of DC has a much higher proportion of black citizens than the NW portion.
+
+\newpage
+
+#Data Driven Questions
+As we explored the data, we felt it would be important to look at the ages of the offenders, given evidence from the peer review articles as well as further analysis of our data. 
+```{r echo=FALSE}
+ggplot(data=Felony_Data ,aes(x=AGE, fill= DMPSJ_CATEGORY )) + geom_bar(width=.50) + ggtitle("AGE") + xlab("Arrest District") +
+      ylab("Amount of Offenses") + scale_fill_discrete(name = "Offense Classification")
+```
+
+```{r echo=FALSE}
+DC4 <- filter(Felony_Data, DMPSJ_CATEGORY  %in% violent) %>%
+  select(DMPSJ_CATEGORY,AGE )
+
+ggplot(data=DC4,aes(x=AGE, fill= DMPSJ_CATEGORY )) + geom_bar( width=.50) + ggtitle("Violent Crimes by Age") + xlab("Arrest District") +
+      ylab("Amount of Offenses") + scale_fill_discrete(name = "Offense Classification")
+
+```
+
+All policing data is currently published by Police District and Police Service Area within those districts.  All census data or population statistics are only aggregated by Ward.  Wards do not line up with Police Districts and overlap in many areas.  This makes it difficult to normalize policing data with ward demographics, making it challenging to draw meaningful conclusions from policing data.  Every 10 years, the Ward lines are redrawn according to new census data.  This constantly changes the census data and creates an ever-shifting demographic picture within the District.  The Police Districts do not change at the same time, or have any large association with the District Wards.  Further analysis into the arrests by Ward would yield interesting results, as DC tracks Ward demographics very closely.
+
+\newpage
+
+#Discussion
+Our initial exploratory analysis did support what we had found previously in the literature. Black people having an arrest disproportion score of 2.87 as compared to 0.89 for White people aligns with the fact that Black people made up 92% of the arrests made in 2016, despite only making up 47% of DC’s population. We found that the districts that had the arrest counts were districts 5, 6 and 7, which are located in the wards with the highest population of Black people. This ties in with the idea of social context also affecting arrest rates. Perhaps there is an underlying reason, other than race, for why these districts are disportionately targeted. The article suggested socio-economic status, family marital status and tolerance of deviance [of the neighborhood] could all play a role (Kirk 2008). These are all things we could explore further in future studies. Additionally, communities with the highest crime rates also seem to have the lowest amount of resources available to them. This suggests the the onus should be put on either police or local government to allocate resources to these neighborhoods and help prevent crime. We would also like to explore arrest numbers among juveniles as our articles discussed the rate at which Black youths are targeted as compared to white youths. The minimum age in our study was only 18, so exploring youth arrest rates, especially for specific crimes would be of interest. Overall, our analysis only confirmed what we expected, that even in a place considered as liberal as Washington, D.C., there are still biases among the community and in policing. As people become more conscious about biases in policing, it will be interesting to see if these trends change at all
+
+\newpage
+
+#References
+A;, F.-M. R. C. H. L. F. C. S. R. (n.d.). The interaction of race and gender as a significant     driver of racial arrest disparities for African American men. Journal of urban health : bulletin of the New York Academy of Medicine. Retrieved December 12, 2021, from https://pubmed.ncbi.nlm.nih.gov/30547363/.
+
+Braga, A. A., Brunson, R. K., & Drakulich, K. M. (2019). Race, place, and effective Wpolicing. Annual Review of Sociology, 45(1), 535–555. https://doi.org/10.1146/annurev-soc-073018-022541
+
+Gase, L. N., Glenn, B. A., Gomez, L. M., Kuo, T., Inkelas, M., & Ponce, N. A. (2016). Understanding racial and ethnic disparities in arrest: The role of individual, home, school, and community characteristics. Race and Social Problems, 8(4), 296–312. https://doi.org/10.1007/s12552-016-9183-8
+
+Kirk, D. S. (2008, February 1). The neighborhood context of racial and ethnic disparities in arrest. Demography. Retrieved December 12, 2021, from https://doi.org/10.1353/dem.2008.0011. 
+
+
+
+
+
+
